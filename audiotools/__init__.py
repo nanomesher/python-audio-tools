@@ -1,3 +1,5 @@
+# /usr/local/lib/python2.7/dist-packages/audiotools/
+
 # Audio Tools, a module and set of tools for manipulating audio data
 # Copyright (C) 2007-2016  Brian Langenberger
 
@@ -16,24 +18,39 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 """the core Python Audio Tools module"""
-
+import time
 import sys
 import re
 import os
 import os.path
 import audiotools.pcm as pcm
+import json
 from functools import total_ordering
 from fractions import Fraction
-
+from pymemcache.client.base import Client
+from pymemcache import serde
 
 PY3 = sys.version_info[0] >= 3
 PY2 = not PY3
-
 
 try:
     from configparser import RawConfigParser
 except ImportError:
     from ConfigParser import RawConfigParser
+
+
+def json_serializer(key, value):
+    if type(value) == str:
+        return value, 1
+    return json.dumps(value), 2
+
+
+def json_deserializer(key, value, flags):
+    if flags == 1:
+        return value
+    if flags == 2:
+        return json.loads(value)
+    raise Exception("Unknown serialization format")
 
 
 class RawConfigParser(RawConfigParser):
@@ -131,6 +148,7 @@ class __system_binaries__(object):
                 if os.access(os.path.join(path, command), os.X_OK):
                     return True
             return False
+
 
 BIN = __system_binaries__(config)
 
@@ -234,6 +252,7 @@ def __format_fields__():
             u"basename": (u"%(basename)s",
                           METADATA_BASENAME)}
 
+
 FORMAT_FIELDS = __format_fields__()
 FORMAT_FIELD_ORDER = (u"track_name",
                       u"artist_name",
@@ -274,6 +293,7 @@ if config.has_option("System", "maximum_jobs"):
 else:
     try:
         from multiprocessing import cpu_count
+
         MAX_JOBS = cpu_count()
     except (ImportError, AttributeError):
         MAX_JOBS = 1
@@ -310,7 +330,7 @@ class Messenger(object):
         and if 'add_newline' is True, appends a newline
         if 'flush' is True, flushes the stream"""
 
-        assert(isinstance(string, str if PY3 else unicode))
+        assert (isinstance(string, str if PY3 else unicode))
         # do nothing
         pass
 
@@ -319,7 +339,7 @@ class Messenger(object):
         and if 'add_newline' is True, appends a newline
         if 'flush' is True, flushes the stream"""
 
-        assert(isinstance(string, unicode))
+        assert (isinstance(string, unicode))
         # we can't output unicode strings directly to streams
         # because non-TTYs will raise UnicodeEncodeErrors
         stream.write(string.encode("UTF-8", "replace"))
@@ -333,7 +353,7 @@ class Messenger(object):
         and if 'add_newline' is True, appends a newline
         if 'flush' is True, flushes the stream"""
 
-        assert(isinstance(string, str))
+        assert (isinstance(string, str))
         stream.write(string)
         if add_newline:
             stream.write(os.linesep)
@@ -405,16 +425,16 @@ class Messenger(object):
         this appends a newline to that message"""
 
         self.error(u"[Errno {:d}] {}: '{}'".format(
-                   oserror.errno,
-                   oserror.strerror,
-                   Filename(oserror.filename)))
+            oserror.errno,
+            oserror.strerror,
+            Filename(oserror.filename)))
 
     def warning(self, s):
         """displays a warning message unicode string to stderr
 
         this appends a newline to that message"""
 
-        self.__print__(string=u"*** Warning: {}".format(s,),
+        self.__print__(string=u"*** Warning: {}".format(s, ),
                        stream=self.__stderr__,
                        add_newline=True,
                        flush=False)
@@ -531,7 +551,7 @@ class output_text(tuple):
 
         import unicodedata
 
-        assert(isinstance(unicode_string, str if PY3 else unicode))
+        assert (isinstance(unicode_string, str if PY3 else unicode))
 
         string = unicodedata.normalize("NFC", unicode_string)
 
@@ -545,8 +565,8 @@ class output_text(tuple):
         return cls.__construct__(
             unicode_string=string,
             char_widths=[CHAR_WIDTHS.get(
-                         unicodedata.east_asian_width(char), 1)
-                         for char in string],
+                unicodedata.east_asian_width(char), 1)
+                for char in string],
             fg_color=fg_color,
             bg_color=bg_color,
             style=style,
@@ -572,17 +592,17 @@ class output_text(tuple):
         | close_codes    | unicode | ANSI escape codes                 |
         """
 
-        assert(len(unicode_string) == len(char_widths))
+        assert (len(unicode_string) == len(char_widths))
 
         return tuple.__new__(cls,
-                             [unicode_string,      # 0
+                             [unicode_string,  # 0
                               tuple(char_widths),  # 1
-                              sum(char_widths),    # 2
-                              fg_color,            # 3
-                              bg_color,            # 4
-                              style,               # 5
-                              open_codes,          # 6
-                              close_codes          # 7
+                              sum(char_widths),  # 2
+                              fg_color,  # 3
+                              bg_color,  # 4
+                              style,  # 5
+                              open_codes,  # 6
+                              close_codes  # 7
                               ])
 
     def __repr__(self):
@@ -704,7 +724,7 @@ class output_text(tuple):
     def set_string(self, unicode_string, char_widths):
         """returns a new output_text with the given string"""
 
-        assert(len(unicode_string) == len(char_widths))
+        assert (len(unicode_string) == len(char_widths))
         return output_text.__construct__(
             unicode_string=unicode_string,
             char_widths=char_widths,
@@ -891,13 +911,13 @@ class output_list(output_text):
         """
 
         return tuple.__new__(cls,
-                             [tuple(output_texts),          # 0
+                             [tuple(output_texts),  # 0
                               sum(map(len, output_texts)),  # 1
-                              fg_color,                     # 2
-                              bg_color,                     # 3
-                              style,                        # 4
-                              open_codes,                   # 5
-                              close_codes                   # 6
+                              fg_color,  # 2
+                              bg_color,  # 3
+                              style,  # 4
+                              open_codes,  # 5
+                              close_codes  # 6
                               ])
 
     # use __repr__ from parent
@@ -1145,7 +1165,7 @@ class output_table_divider(output_table_blank):
     def format(self, column_widths, is_tty=False):
         """returns formatted row as unicode"""
 
-        assert(len(column_widths) == len(self.__dividers__))
+        assert (len(column_widths) == len(self.__dividers__))
 
         return u"".join([divider * width
                          for (divider, width) in
@@ -1167,7 +1187,7 @@ class output_table_row(output_table_divider):
     def format(self, column_widths, is_tty=False):
         """returns formatted row as unicode"""
 
-        assert(len(column_widths) == len(self.__columns__))
+        assert (len(column_widths) == len(self.__columns__))
 
         return u"".join([column.format(width, is_tty)
                          for (column, width) in
@@ -1329,6 +1349,7 @@ class ProgressDisplay(object):
             for row in self.progress_rows:
                 if (((row is not None) and
                      (self.displayed_rows < screen_height))):
+                    # add update logic here
                     self.messenger.output(row.unicode(screen_width))
                     self.displayed_rows += 1
 
@@ -1429,10 +1450,24 @@ class ProgressRow(object):
 class SingleProgressDisplay(ProgressDisplay):
     """a specialized ProgressDisplay for handling a single line of output"""
 
+    songname = u''
+
     def __init__(self, messenger, progress_text):
         """takes a Messenger class and unicode string for output"""
 
         ProgressDisplay.__init__(self, messenger)
+        client = Client(('localhost', 11211), serializer=serde.python_memcache_serializer,
+                        deserializer=serde.python_memcache_deserializer)
+
+        self.songname = progress_text
+
+        rippinginfodict = client.get('ripping')
+        if (rippinginfodict == None):
+            rippinginfodict = {}
+
+        rippinginfodict[str(progress_text.split('-')[0])] = "start"
+        client.set('ripping', rippinginfodict)
+
         self.row = self.add_row(progress_text)
 
         from time import time
@@ -1444,11 +1479,30 @@ class SingleProgressDisplay(ProgressDisplay):
         """updates the output line with new progress value"""
 
         now = self.time()
-        if (now - self.last_updated) > 0.25:
+        if (now - self.last_updated) > 0.4:
+            client = Client(('localhost', 11211), serializer=serde.python_memcache_serializer,
+                            deserializer=serde.python_memcache_deserializer)
+
             self.clear_rows()
             self.row.update(progress)
             self.display_rows()
             self.last_updated = now
+
+            # print(self.songname)
+            try:
+                # print(int(self.songname.split('-')[0]))
+                # ripprogressdict[self.songname.split('-')[0]] = round(float(progress),2)
+                ripprogressdict = client.get('ripprogress')
+                if (ripprogressdict == None):
+                    ripprogressdict = {}
+                # print(ripprogressdict)
+                ripprogressdict[str(int(self.songname.split('-')[0]))] = round(float(progress), 2)
+                # print(str(int(self.songname.split('-')[0])))
+                # print(round(float(progress),2))
+                ripprogressdict['riplastupdate'] = time.strftime("%Y-%m-%d %H:%M:%S")
+                client.set('ripprogress', ripprogressdict)
+            except:
+                print "Unexpected error:", sys.exc_info()[0]
 
 
 class ReplayGainProgressDisplay(ProgressDisplay):
@@ -1611,7 +1665,7 @@ class DecodingError(IOError):
     and raise EncodingError"""
 
     def __init__(self, error_message):
-        assert(isinstance(error_message, str if PY3 else unicode))
+        assert (isinstance(error_message, str if PY3 else unicode))
         IOError.__init__(self, error_message)
         self.error_message = error_message
 
@@ -1722,7 +1776,7 @@ def file_type(file):
             return None
     elif header[0:4] == b"OggS":
         # possibly Ogg FLAC, Ogg Vorbis, Ogg Opus or Ogg Speex
-        #if header[0x1C:0x21] == b"\x7FFLAC":
+        # if header[0x1C:0x21] == b"\x7FFLAC":
         #    return OggFlacAudio
         if header[0x1C:0x23] == b"\x01vorbis":
             return VorbisAudio
@@ -1836,7 +1890,7 @@ class Filename(tuple):
         if isinstance(filename, cls):
             return filename
         else:
-            assert(isinstance(filename, str))
+            assert (isinstance(filename, str))
             try:
                 stat = os.stat(filename)
                 return tuple.__new__(cls, [os.path.normpath(filename),
@@ -2081,7 +2135,7 @@ def filename_to_type(path):
 
     (path, ext) = os.path.splitext(path)
     if len(ext) > 0:
-        ext = ext[1:]   # remove the "."
+        ext = ext[1:]  # remove the "."
         SUFFIX_MAP = {}
         for audio_type in TYPE_MAP.values():
             SUFFIX_MAP.setdefault(audio_type.SUFFIX, []).append(audio_type)
@@ -3083,8 +3137,8 @@ def calculate_replay_gain(tracks, progress=None):
 
     from bisect import bisect
 
-    SUPPORTED_RATES = [8000,  11025,  12000,  16000,  18900,  22050, 24000,
-                       32000, 37800,  44100,  48000,  56000,  64000, 88200,
+    SUPPORTED_RATES = [8000, 11025, 12000, 16000, 18900, 22050, 24000,
+                       32000, 37800, 44100, 48000, 56000, 64000, 88200,
                        96000, 112000, 128000, 144000, 176400, 192000]
 
     target_rate = ([SUPPORTED_RATES[0]] + SUPPORTED_RATES)[
@@ -3105,15 +3159,15 @@ def calculate_replay_gain(tracks, progress=None):
 
         # perform calculation by decoding through ReplayGain
         with rg.to_pcm(
-            PCMReaderProgress(
-                PCMConverter(pcm,
-                             target_rate,
-                             pcm.channels,
-                             pcm.channel_mask,
-                             pcm.bits_per_sample),
-                total_frames,
-                progress,
-                current_frames)) as pcmreader:
+                PCMReaderProgress(
+                    PCMConverter(pcm,
+                                 target_rate,
+                                 pcm.channels,
+                                 pcm.channel_mask,
+                                 pcm.bits_per_sample),
+                    total_frames,
+                    progress,
+                    current_frames)) as pcmreader:
             transfer_data(pcmreader.read, lambda f: None)
             current_frames += track_frames
 
@@ -3630,7 +3684,7 @@ class MetaData(object):
                          {(img.type, img.data) for img in metadata.images()})
 
         return MetaData(images=[img for img in self.images() if
-                        (img.type, img.data) in common_images],
+                                (img.type, img.data) in common_images],
                         **{attr: fields1[attr] for attr in
                            set(fields1.keys()) & set(fields2.keys())
                            if fields1[attr] == fields2[attr]})
@@ -3661,14 +3715,14 @@ class Image(object):
                OTHER
         """
 
-        assert(isinstance(data, bytes))
-        assert(isinstance(mime_type, str if PY3 else unicode))
-        assert(isinstance(width, int))
-        assert(isinstance(height, int))
-        assert(isinstance(color_depth, int))
-        assert(isinstance(color_count, int))
-        assert(isinstance(description, str if PY3 else unicode))
-        assert(isinstance(type, int))
+        assert (isinstance(data, bytes))
+        assert (isinstance(mime_type, str if PY3 else unicode))
+        assert (isinstance(width, int))
+        assert (isinstance(height, int))
+        assert (isinstance(color_depth, int))
+        assert (isinstance(color_count, int))
+        assert (isinstance(description, str if PY3 else unicode))
+        assert (isinstance(type, int))
 
         self.data = data
         self.mime_type = mime_type
@@ -4141,8 +4195,8 @@ class AudioFile(object):
 
         # these should be traditional strings under
         # both Python 2 and 3
-        assert((format is None) or isinstance(format, str))
-        assert((suffix is None) or isinstance(suffix, str))
+        assert ((format is None) or isinstance(format, str))
+        assert ((suffix is None) or isinstance(suffix, str))
 
         # handle defaults
         if format is None:
@@ -4188,9 +4242,9 @@ class AudioFile(object):
             album_digits = len(str(album_total))
 
             format_dict[u"album_track_number"] = (
-                u"%%%(album_digits)d.%(album_digits)dd%%2.2d" %
-                {u"album_digits": album_digits} %
-                (album_number, track_number))
+                    u"%%%(album_digits)d.%(album_digits)dd%%2.2d" %
+                    {u"album_digits": album_digits} %
+                    (album_number, track_number))
 
         if PY2:
             format_dict[u"basename"] = os.path.splitext(
@@ -4533,7 +4587,7 @@ def read_sheet_string(sheet_string):
 
     str_type = str if PY3 else unicode
 
-    assert(isinstance(sheet_string, str_type))
+    assert (isinstance(sheet_string, str_type))
 
     if u"CD_DA" in sheet_string:
         from audiotools.toc import read_tocfile_string
@@ -4764,8 +4818,8 @@ class SheetTrack(object):
 | copy_permitted | boolean      | whether copying is permitted          |
         """
 
-        assert(isinstance(number, int))
-        assert(isinstance(filename, str if PY3 else unicode))
+        assert (isinstance(number, int))
+        assert (isinstance(filename, str if PY3 else unicode))
 
         self.__number__ = number
         self.__track_indexes__ = list(track_indexes)
@@ -4939,7 +4993,7 @@ def has_pre_gap_track(audiofiles):
         return False
 
     if ([m.track_number for m in metadatas[1:]] !=
-        list(range(1, len(metadatas)))):
+            list(range(1, len(metadatas)))):
         # the remainder should be in ascending order with no gaps
         return False
 
@@ -5132,8 +5186,8 @@ class PCMReaderDeHead(PCMReader):
                 else:
                     (head, tail) = frame.split(self.pcm_frames)
                     self.pcm_frames -= head.frames
-                    assert(self.pcm_frames == 0)
-                    assert(tail.frames > 0)
+                    assert (self.pcm_frames == 0)
+                    assert (tail.frames > 0)
                     return tail
             else:
                 return self.pcmreader.read(pcm_frames)
@@ -5144,7 +5198,7 @@ class PCMReaderDeHead(PCMReader):
                                   self.channels,
                                   self.bits_per_sample,
                                   True)
-            assert(frame.frames == -self.pcm_frames)
+            assert (frame.frames == -self.pcm_frames)
             self.pcm_frames = 0
             return frame
 
@@ -5199,7 +5253,7 @@ def metadata_lookup(musicbrainz_disc_id,
     if no match can be found for the disc IDs
     """
 
-    assert(musicbrainz_disc_id.offsets == freedb_disc_id.offsets)
+    assert (musicbrainz_disc_id.offsets == freedb_disc_id.offsets)
 
     matches = []
 
@@ -5324,15 +5378,14 @@ def track_metadata_lookup(audiofiles,
         choices = []
 
         for choice in metadata_lookup(
-            freedb_disc_id=FDiscID.from_tracks(audiofiles),
-            musicbrainz_disc_id=MDiscID.from_tracks(audiofiles),
-            musicbrainz_server=musicbrainz_server,
-            musicbrainz_port=musicbrainz_port,
-            freedb_server=freedb_server,
-            freedb_port=freedb_port,
-            use_musicbrainz=use_musicbrainz,
-            use_freedb=use_freedb):
-
+                freedb_disc_id=FDiscID.from_tracks(audiofiles),
+                musicbrainz_disc_id=MDiscID.from_tracks(audiofiles),
+                musicbrainz_server=musicbrainz_server,
+                musicbrainz_port=musicbrainz_port,
+                freedb_server=freedb_server,
+                freedb_port=freedb_port,
+                use_musicbrainz=use_musicbrainz,
+                use_freedb=use_freedb):
             track_0 = merge_metadatas(choice)
             track_0.track_number = 0
             choices.append([track_0] + choice)
@@ -5645,7 +5698,7 @@ class ExecProgressQueue(object):
                             self.__queued_jobs__.popleft()
 
                     # remove job from pool
-                    del(job_pool[job_fd])
+                    del (job_pool[job_fd])
 
                     # remove job from progress display, if present
                     if job_fd in self.__displayed_rows__:
@@ -5924,9 +5977,9 @@ AVAILABLE_TYPES = (FlacAudio,
 TYPE_MAP = {track_type.NAME: track_type for track_type in AVAILABLE_TYPES}
 
 DEFAULT_QUALITY = {track_type.NAME:
-                   config.get_default("Quality",
-                                      track_type.NAME,
-                                      track_type.DEFAULT_COMPRESSION)
+                       config.get_default("Quality",
+                                          track_type.NAME,
+                                          track_type.DEFAULT_COMPRESSION)
                    for track_type in AVAILABLE_TYPES
                    if (len(track_type.COMPRESSION_MODES) > 1)}
 
