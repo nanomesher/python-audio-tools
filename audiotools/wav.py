@@ -826,9 +826,11 @@ class WaveAudio(WaveContainer):
         fields filled-in and encoded as FS_ENCODING
         raises UnsupportedTracknameField if the format string
         contains invalid template fields"""
+        ## rename to add meta
 
         if format is None:
-            format = "track%(track_number)2.2d.wav"
+            #format = "track%(track_number)2.2d.wav"
+            format = '%(track_number)2.2d - %(artist_name)s - %(track_name)s.wav'
         return AudioFile.track_name(file_path, track_metadata, format,
                                     suffix=cls.SUFFIX)
 
